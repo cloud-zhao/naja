@@ -20,16 +20,16 @@ class MyTools(object):
 
 	@staticmethod
 	def get_uuid(constant=False):
-		uuid_file="%s/.naja.uuid" %(get_abs_path(__file__))
+		uuid_file="%s/.naja.uuid" %(MyTools.get_abs_path(__file__))
 		uuid_str=str(uuid.uuid1())
 		if not constant:
 			return uuid_str
 
 		if os.path.exists(uuid_file):
-			uuid_str=head(uuid_file)
+			uuid_str=MyTools.head(uuid_file)[0]
 		else:
-			write_file(uuid_file,uuid_str[0])
-		return uuid_str[0]
+			MyTools.write_file(uuid_file,uuid_str)
+		return uuid_str
 	
 	@staticmethod
 	def get_netcard():  
