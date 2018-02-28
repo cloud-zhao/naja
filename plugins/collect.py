@@ -2,6 +2,7 @@ import time
 import json
 import psutil
 import os
+import copy
 from naja.util import MyTools,SysPs
 from naja.send import SendHttp
 from naja.mysql import MysqlDB
@@ -45,6 +46,8 @@ class CollectSysMsg(TRun):
 		old_file=self.abs_path+"/.collectSysMsg.old.json"
 		MyTools.write_file(old_file,json.dumps(self.old_info))
 
+	def _now_time(self):
+		return int(time.time())
 
 	def get_sleep(self):
 		return 1
@@ -58,7 +61,7 @@ class CollectSysMsg(TRun):
 		ps=self.sys_ps
 		rc.update_config()
 		roles=rc.get_config('role')
-		r=_roles(roles)
+		r=self._roles(roles)
 		for k,v in r.items():
 			if ps.get_process(cmd=v):
 				role[k]={'status':1}
@@ -67,35 +70,37 @@ class CollectSysMsg(TRun):
 			if i not in role.keys():
 				self.info['role'][i]['status']=0
 
-	def _roles(r,k=None,s={}):
+	def _roles(self,r,k=None,s={}):
 		for i in r.keys():
 			p=i if not k else k+"."+i
 			if not isinstance(r[i],dict):
 				s[p]=r[i]
 			else:
-				_roles(r[i],p,s)
+				self._roles(r[i],p,s)
 		return s
 
-	def sys_message(self):
-		cpu=psutil.cpu_times_percent()
-		mem=psutil.virtual_memory()
-		r_cpu={}
+	def _mem(self):
 		r_mem={}
-		r_net={}
-		r_proc={}
-		r_disk={}
-		self.info['cpu']=r_cpu
-		self.info['mem']=r_mem
-		self.info['net']=r_net
-		self.info['proc']=r_proc
-		self.info['disk']=r_disk
-		disk_io=psutil.disk_io_counters(perdisk=True)
-		r_cpu['idle']=cpu.idle
-		r_cpu['user']=cpu.user
-		r_cpu['system']=cpu.system
+		mem=psutil.virtual_memory()
 		r_mem['total']=mem.total
 		r_mem['used']=mem.used
 		r_mem['free']=mem.free
+		r_mem['buffer']=mem.buffers if hasattr(mem,'buffers') else 0
+		r_mem['cached']=mem.cached if hasattr(mem,'cached') else 0
+		r_mem['shared']=mem.shared if hasattr(mem,'shared') else 0
+		return r_mem
+
+	def _cpu(self):
+		r_cpu={}
+		cpu=psutil.cpu_times_percent()
+		r_cpu['idle']=cpu.idle
+		r_cpu['user']=cpu.user
+		r_cpu['system']=cpu.system
+		return r_cpu
+
+	def _disk(self):
+		r_disk={}
+		disk_io=psutil.disk_io_counters(perdisk=True)
 		for i in psutil.disk_partitions():
 			r_disk[i.mountpoint]={"disk":i.device,"fstype":i.fstype}
 		for k,v in r_disk.items():
@@ -110,9 +115,31 @@ class CollectSysMsg(TRun):
 			else:
 				v['read']=0.0
 				v['write']=0.0
-		r_proc['total']=len(psutil.pids())
+		return r_disk
+
+	def _net(self):
+		i_net={}
+		r_net={}
 		for i in MyTools.get_netcard():
-			r_net[i[0]]={"ip":i[1]}
+			i_net[i[1]]=r_net[i[0]]={"ip":i[1],"link":0,"total_link":0}
+		links=psutil.net_connections()
+		for i in links:
+			i_net[i]['link']+=1
+		for i in i_net:
+			i_net[i]['total_link']=len(links)
+		return r_net
+
+	def _proc(self):
+		r_proc={}
+		r_proc['total']=len(psutil.pids())
+		return r_proc
+
+	def sys_message(self):
+		self.info['cpu']=self._cpu()
+		self.info['mem']=self._mem()
+		self.info['net']=self._net()
+		self.info['proc']=self._proc()
+		self.info['disk']=self._disk()
 
 
 	def run(self):
@@ -148,15 +175,19 @@ class CollectSysMsg(TRun):
 		sqls.append(self._host_sql())
 		sqls.append(self._ip_sql())
 		sqls.append(self._role_sql())
+		sqls.append(self._cpu_sql())
+		sqls.append(self._mem_sql())
+		sqls.append(self._disk_sql())
 		for i in sqls:
 			print i
 		#mysql.multiple_write(";".join(sqls))
+		self.old_info=copy.copy(self.info)
 
 	def _role_sql(self):
 		hid=self.host_id
 		o_role=self.old_info.get('role',{})
 		role=self.info['role']
-		timestamp=int(time.time())
+		timestamp=self._now_time()
 		nr=[i for i in role.keys() if i not in o_role.keys()]
 		if nr:
 			role_sql='insert into roles (host_id,host_role,timestamp) values '
@@ -174,7 +205,7 @@ class CollectSysMsg(TRun):
 		hid=self.host_id
 		o_net=self.old_info.get("net",{})
 		net=self.info['net']
-		timestamp=int(time.time())
+		timestamp=self._now_time()
 		if not net:
 			return ''
 		nc=[(i,net[i]['ip']) for i in net.keys() if i not in o_net.keys()]
@@ -196,7 +227,7 @@ class CollectSysMsg(TRun):
 		hid=self.host_id
 		o_info=self.old_info
 		info=self.info
-		timestamp=int(time.time())
+		timestamp=self._now_time()
 		if o_info:
 			host_sql='update hosts set timestamp="%d"%s where host_id="%s"'
 			if o_info['hostname'] != info['hostname']:
@@ -208,5 +239,29 @@ class CollectSysMsg(TRun):
 
 		return host_sql
 
+	def _cpu_sql(self):
+		hid=self.host_id
+		timestamp=self._now_time()
+		cpu=self.info['cpu']
+		cpu_sql='insert into cpu values ("%s","%0.2f","%0.2f","%0.2f","%d")'
+		return cpu_sql % (hid,cpu['user'],cpu['system'],cpu['idle'],timestamp)
 
+	def _mem_sql(self):
+		hid=self.host_id
+		timestamp=self._now_time()
+		mem=self.info['mem']
+		mem_sql='insert into mem values ("%s","%d","%d","%d","%d","%d","%d","%d")'
+		return mem_sql % (hid,mem['total'],mem['used'],mem['free'],mem['shared'],mem['buffer'],mem['cached'],timestamp)
 
+	def _disk_sql(self):
+		hid=self.host_id
+		timestamp=self._now_time()
+		d=self.info['disk']
+		disk_sql='insert into disk values '
+		value='("%s","%s","%s","%s","%d","%d","%0.2f","%0.2f","%d")'
+		values=[value % (hid,k,v['disk'],v['fstype'],v['total'],v['used'],v['read'],v['write'],timestamp) for k,v in d.items()]
+		disk_sql+=','.join(values)
+		return disk_sql
+	
+
+	

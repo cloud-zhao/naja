@@ -10,6 +10,7 @@ import socket
 import fcntl
 import struct
 import json
+import psutil
 from naja.error import SysProcError,ConfigFileError
 
 

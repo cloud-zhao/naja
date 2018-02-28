@@ -59,6 +59,56 @@ create table roles (
 #insert into roles_info (host_id,host_role,timestamp) values
 #("ccb7e38c-ab11-470c-bd49-52a5500ed568","mysql","1449900992");
 
+#主机内存表
+drop table if exists mem;
+create table mem (
+	host_id		varchar(36) not null,
+	total		varchar(20) not null,
+	used		varchar(20) not null,
+	free		varchar(20) not null,
+	shared		varchar(20) not null,
+	buffer		varchar(20)	not null,
+	cached		varchar(20)	not null,
+	timestamp	varchar(10) not null
+);
+
+#主机cpu表
+drop table if exists cpu;
+create table cpu (
+	host_id		varchar(36) not null,
+	userd		varchar(5)	not null,
+	sys			varchar(5)	not null,
+	idle		varchar(5)	not null,
+	timestamp	varchar(10)	not null
+);
+
+#主机磁盘表
+drop table if exists disk;
+create table disk (
+	host_id		varchar(36) not null,
+	mount		varchar(255) not null,
+	device		varchar(255) not null,
+	fstype		varchar(255) not null,
+	total		varchar(20) not null,
+	used		varchar(20)	not null,
+	read		varchar(10)	not null,
+	write		varchar(10)	not null,
+	timestamp	varchar(10) not null
+);
+
+#主机网络io表
+drop table if exists net_io;
+create table net_io (
+	host_id		varchar(36) not null,
+	host_ifname	varchar(255) not null,
+	send		varchar(40) not null,
+	receive		varchar(40) not null,
+	link_num	varchar(10)	not null,
+	total_link	varchar(10) not null,
+	timestamp	varchar(10) not null
+);
+
+
 
 #flume角色表,此表是在添加新角色探测的时候需要添加创建的新表
 #表名必须以"role_角色名"为名称且包含host_id字段
