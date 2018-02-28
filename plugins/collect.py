@@ -11,11 +11,35 @@ from naja.plugin import TRun
 from naja.plugin import DRun
 
 class CollectSysMsg(TRun):
+	DEFAULT_CONFIG={
+		'send_type':'mysql'
+	}
+	MYSQL_CONFIG={
+		'mysql_host':None,
+		'mysql_user':'naja',
+		'mysql_db':'naja',
+		'mysql_password':None,
+		'mysql_port':3306
+	}
+	SER_CONFIG={
+		'ser_host':None
+	}
+	REMOTE_CONFIG={
+		'local_conf':"%s/s.properties" % (MyTools.get_abs_path(__file__)),
+		'remote_server':"http://172.17.124.208:15050/source/naja"
+	}
+
 	def __init__(self,**config):
-		self.conf=config
+		#load config
+		self.conf=copy.copy(self.DEFAULT_CONFIG)
+		self._load_conf(self.conf,config)
+		self._load_mysql_conf(config)
+		self._load_remote_conf(config)
+		self._load_ser_conf(config)
+
 		self.abs_path=MyTools.get_abs_path(__file__)
-		self.config_file=config.get('config_file',"%s/s.properties" % (self.abs_path))
-		self.rc=RemoteConfig(local_conf=self.config_file)
+		self.rc=RemoteConfig(**self.conf)
+		self.mysql=None
 		self.sys_ps=SysPs()
 		self.host_id=MyTools.get_uuid(True)
 		self._load_old_info()
@@ -30,6 +54,22 @@ class CollectSysMsg(TRun):
 				"net":	{},
 				"user":MyTools.get_user()
 			}
+
+	def _load_remote_conf(self,config):
+		self._load_conf(self.REMOTE_CONFIG,config)
+
+	def _load_mysql_conf(self,config):
+		self._load_conf(self.MYSQL_CONFIG,config)
+
+	def _load_ser_conf(self,config):
+		self._load_conf(self.SER_CONFIG,config)
+
+	def _load_conf(self,CONFIG,config):
+		for k in CONFIG:
+			if k in config:
+				self.conf[k]=config[k]
+			else:
+				self.conf[k]=CONFIG[k]
 
 	def _load_old_info(self):
 		old_file=self.abs_path+"/.collectSysMsg.old.json"
@@ -124,7 +164,8 @@ class CollectSysMsg(TRun):
 			i_net[i[1]]=r_net[i[0]]={"ip":i[1],"link":0,"total_link":0}
 		links=psutil.net_connections()
 		for i in links:
-			i_net[i]['link']+=1
+			if i_net.has_key(i.laddr.ip):
+				i_net[i.laddr.ip]['link']+=1
 		for i in i_net:
 			i_net[i]['total_link']=len(links)
 		return r_net
@@ -148,26 +189,30 @@ class CollectSysMsg(TRun):
 		self.send()
 
 	def send(self):
-		if self.conf['send_ser']:
-			self.send_ser()
-		elif self.conf['send_mysql']:
-			self.send_mysql()
-		else:
-			print(json.dumps(self.info))
+		try:
+			t=self.conf['send_type']
+			if t == "ser":
+				self.send_ser()
+			elif t == "mysql":
+				self.send_mysql()
+			else:
+				jinfo=json.dumps(self.info)
+			self.old_info=copy.copy(self.info)
+			self._write_old_info()
+		except Exception,e:
+			print(e)
 
 	def send_ser(self):
 		pass
 
 	def send_mysql(self):
-		h=self.conf['mysql_host'] if self.conf.has_key('mysql_host') else None
-		d=self.conf['mysql_db'] if self.conf.has_key('mysql_db') else None
-		u=self.conf['mysql_user'] if self.conf.has_key('mysql_user') else None
-		p=self.conf['mysql_password'] if self.conf.has_key('mysql_password') else None
+		h=self.conf['mysql_host']
+		p=self.conf['mysql_password']
 		assert h,"mysql_host parameters must be specified"
-		assert d,"mysql_db parameters must be specified"
-		assert u,"mysql_user parameters must be specified"
 		assert p,"mysql_password parameters must be specified"
-		#mysql=MysqlDB(host=h,db=d,user=u,password=p)
+		if not self.mysql:
+			self.mysql=MysqlDB(host=h,db=self.conf['mysql_db'],user=self.conf['mysql_user'],password=p,port=self.conf['mysql_port'])
+		mysql=self.mysql
 		oi=self.old_info
 		ni=self.info
 		host_id=self.host_id
@@ -178,10 +223,9 @@ class CollectSysMsg(TRun):
 		sqls.append(self._cpu_sql())
 		sqls.append(self._mem_sql())
 		sqls.append(self._disk_sql())
-		for i in sqls:
-			print i
-		#mysql.multiple_write(";".join(sqls))
-		self.old_info=copy.copy(self.info)
+		#for i in sqls:
+		#	print i
+		mysql.multiple_write(";".join(sqls))
 
 	def _role_sql(self):
 		hid=self.host_id

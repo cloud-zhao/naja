@@ -25,7 +25,7 @@ class MysqlDB(object):
 		self.dbh=self._mysql_connect()
 		
 	def _mysql_connect(self):
-		return MySQLdb.connect(self.conf['host'],self.conf['user'],self.conf['password'],self.conf['db'])
+		return MySQLdb.connect(self.conf['host'],self.conf['user'],self.conf['password'],self.conf['db'],port=self.conf['port'])
 
 	def _mysql_exec(self,sql):
 		try:

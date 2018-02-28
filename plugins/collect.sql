@@ -91,8 +91,8 @@ create table disk (
 	fstype		varchar(255) not null,
 	total		varchar(20) not null,
 	used		varchar(20)	not null,
-	read		varchar(10)	not null,
-	write		varchar(10)	not null,
+	io_read		varchar(10)	not null,
+	io_write	varchar(10)	not null,
 	timestamp	varchar(10) not null
 );
 
