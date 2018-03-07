@@ -12,9 +12,9 @@ class MysqlDB(object):
 	DEFAULT_CONFIG={
 		"host":"",
 		"port":3306,
-		"db":"inke_bd_cmdb",
-		"user":"inke_bd_cmdb",
-		"password":"inke_bd_cmdb",
+		"db":"naja",
+		"user":None,
+		"password":None,
 	}
 
 	def __init__(self,**config):
