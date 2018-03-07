@@ -1,5 +1,5 @@
-#drop database if exists naja;
-#create database naja default character set utf8;
+drop database if exists naja;
+create database naja default character set utf8;
 
 #grant all privileges on naja.* to naja@'%' identified by 'naja';
 #grant all privileges on naja.* to naja@'localhost' identified by 'naja';
@@ -14,20 +14,20 @@ drop table if exists hosts;
 create table hosts (
 	host_id		varchar(36) not null,
 	host_name	varchar(255) not null,
-	timestamp	varchar(10) not null,
+	timestamp	bigint not null,
 	primary key (host_id)
 );
 #insert into hosts (host_id,host_name,timestamp) values
-#("ccb7e38c-ab11-470c-bd49-52a5500ed568","hadoop43","root","1234567890");
+#("ccb7e38c-ab11-470c-bd49-52a5500ed568","hadoop43","root",1234567890000);
 
 #主机密码表
 drop table if exists password;
 create table password (
 	host_id		varchar(36) not null,
 	host_user	varchar(50) not null,
-	passwd		varchar(255) ,
-	public_key	varchar(1024) ,
-	timestamp	varchar(10),
+	passwd		varchar(255) not null,
+	public_key	varchar(1024) not null,
+	timestamp	bigint not null,
 	primary key (host_id,host_user)
 );
 
@@ -37,11 +37,11 @@ create table ips (
 	host_id		varchar(36) not null,
 	host_ifname	varchar(36) not null,
 	host_ip		varchar(16) not null,
-	timestamp	varchar(10) not null,
+	timestamp	bigint not null,
 	primary key (host_id,host_ifname)
 );
-#insert into hosts_ip (host_id,host_ifname,host_ip) values
-#("ccb7e38c-ab11-470c-bd49-52a5500ed568","em3","42.62.88.226");
+#insert into hosts_ip values
+#("ccb7e38c-ab11-470c-bd49-52a5500ed568","em3","42.62.88.226",1234567890000);
 
 #主机角色表
 drop table if exists roles;
@@ -49,37 +49,37 @@ create table roles (
 	host_id		varchar(36) not null,
 	host_role	varchar(255) not null,
 	table_name	varchar(255),
-	timestamp	varchar(10) not null,
+	timestamp	bigint not null,
 	primary key (host_id,host_role)
 );
 #table_name 存储主机角色对应的信息的表,具体表由指定探测某种角色需要上报的信息决定。
 #host_role in enum("flume","mysql","kafka","datanode","namenode",...,...)
 #insert into roles_info (host_id,host_role,table_name,timestamp) values
-#("ccb7e38c-ab11-470c-bd49-52a5500ed568","flume","role_flume","1234567890");
+#("ccb7e38c-ab11-470c-bd49-52a5500ed568","flume","role_flume",1234567890000);
 #insert into roles_info (host_id,host_role,timestamp) values
-#("ccb7e38c-ab11-470c-bd49-52a5500ed568","mysql","1449900992");
+#("ccb7e38c-ab11-470c-bd49-52a5500ed568","mysql",1449900992000);
 
 #主机内存表
 drop table if exists mem;
 create table mem (
 	host_id		varchar(36) not null,
-	total		varchar(20) not null,
-	used		varchar(20) not null,
-	free		varchar(20) not null,
-	shared		varchar(20) not null,
-	buffer		varchar(20)	not null,
-	cached		varchar(20)	not null,
-	timestamp	varchar(10) not null
+	total		bigint	not null,
+	used		bigint	not null,
+	free		bigint	not null,
+	shared		bigint	not null,
+	buffer		bigint	not null,
+	cached		bigint	not null,
+	timestamp	bigint	not null
 );
 
 #主机cpu表
 drop table if exists cpu;
 create table cpu (
 	host_id		varchar(36) not null,
-	userd		varchar(5)	not null,
-	sys			varchar(5)	not null,
-	idle		varchar(5)	not null,
-	timestamp	varchar(10)	not null
+	userd		double	not null,
+	sys			double	not null,
+	idle		double	not null,
+	timestamp	bigint	not null
 );
 
 #主机磁盘表
@@ -89,11 +89,11 @@ create table disk (
 	mount		varchar(255) not null,
 	device		varchar(255) not null,
 	fstype		varchar(255) not null,
-	total		varchar(20) not null,
-	used		varchar(20)	not null,
-	io_read		varchar(10)	not null,
-	io_write	varchar(10)	not null,
-	timestamp	varchar(10) not null
+	total		bigint	not null,
+	used		bigint	not null,
+	io_read		double	not null,
+	io_write	double	not null,
+	timestamp	bigint	not null
 );
 
 #主机网络io表
@@ -101,11 +101,11 @@ drop table if exists net_io;
 create table net_io (
 	host_id		varchar(36) not null,
 	host_ifname	varchar(255) not null,
-	send		varchar(40) not null,
-	receive		varchar(40) not null,
-	link_num	varchar(10)	not null,
-	total_link	varchar(10) not null,
-	timestamp	varchar(10) not null
+	sent		double	not null,
+	recv		double	not null,
+	link_num	bigint	not null,
+	total_link	bigint	not null,
+	timestamp	bigint	not null
 );
 
 
@@ -119,7 +119,7 @@ create table role_flume (
 	source		varchar(1024),
 	channel		varchar(1024),
 	sink		varchar(1024),
-	timestamp	varchar(10) not null,
+	timestamp	bigint not null,
 	primary key (host_id,instance)
 );
 

@@ -87,7 +87,7 @@ class CollectSysMsg(TRun):
 		MyTools.write_file(old_file,json.dumps(self.old_info))
 
 	def _now_time(self):
-		return int(time.time())
+		return int(time.time()*1000)
 
 	def get_sleep(self):
 		return 1
@@ -142,33 +142,65 @@ class CollectSysMsg(TRun):
 		r_disk={}
 		disk_io=psutil.disk_io_counters(perdisk=True)
 		for i in psutil.disk_partitions():
-			r_disk[i.mountpoint]={"disk":i.device,"fstype":i.fstype}
+			r_disk[i.mountpoint]={"device":i.device,"fstype":i.fstype}
 		for k,v in r_disk.items():
-			device=os.path.basename(v['disk'])
+			device=os.path.basename(v['device'])
 			u=psutil.disk_usage(k)
 			v['total']=u.total
 			v['used']=u.used
 			v['percent']=u.percent
 			if disk_io.has_key(device):
-				v['read']=disk_io[device].read_bytes/float(disk_io[device].read_time)
-				v['write']=disk_io[device].write_bytes/float(disk_io[device].write_time)
+				v['read']=disk_io[device].read_bytes
+				v['read_time']=disk_io[device].read_time
+				v['write']=disk_io[device].write_bytes
+				v['write_time']=disk_io[device].write_time
 			else:
-				v['read']=0.0
-				v['write']=0.0
+				v['read']=0
+				v['write']=0
+				v['read_time']=1
+				v['write_time']=1
 		return r_disk
 
+	def _disk_rate(self):
+		od=self.old_info.get('disk',{})
+		d=self.info['disk']
+		rd={}
+		for k,v in d.items():
+			o_r=od[k]['read'] if od.has_key(k) else v['read']
+			o_w=od[k]['write'] if od.has_key(k) else v['write']
+			rrate=v['read']-o_r/float(self.get_schedule())
+			wrate=v['write']-o_w/float(self.get_schedule())
+			rd[k]={'read':rrate,'write':wrate}
+		return rd
+
 	def _net(self):
-		i_net={}
-		r_net={}
+		i_net={}	#ip is key
+		r_net={}	#ifName is key
 		for i in MyTools.get_netcard():
-			i_net[i[1]]=r_net[i[0]]={"ip":i[1],"link":0,"total_link":0}
+			i_net[i[1]]=r_net[i[0]]={"ip":i[1],"recv":0,"sent":0,"link":0,"total_link":0}
 		links=psutil.net_connections()
+		flow=psutil.net_io_counters(pernic=True)
 		for i in links:
 			if i_net.has_key(i.laddr.ip):
 				i_net[i.laddr.ip]['link']+=1
 		for i in i_net:
 			i_net[i]['total_link']=len(links)
+		for i in r_net:
+			r_net[i]['recv']=flow[i].bytes_recv
+			r_net[i]['sent']=flow[i].bytes_sent
 		return r_net
+
+	def _net_rate(self):
+		o_net=self.old_info.get('net',{})
+		net=self.info['net']
+		nr={}
+		for i in net:
+			o_sent=o_net.get(i,{"sent":net[i]['sent']})['sent']
+			o_recv=o_net.get(i,{"recv":net[i]['recv']})['recv']
+			rsent=(net[i]['sent']-o_sent)/float(self.get_schedule())
+			rrecv=(net[i]['recv']-o_recv)/float(self.get_schedule())
+			nr[i]={'sent':rsent,'recv':rrecv}
+		return nr
 
 	def _proc(self):
 		r_proc={}
@@ -179,7 +211,7 @@ class CollectSysMsg(TRun):
 		self.info['cpu']=self._cpu()
 		self.info['mem']=self._mem()
 		self.info['net']=self._net()
-		self.info['proc']=self._proc()
+		self.info['proc']=self._proc()	#proc 未写入表
 		self.info['disk']=self._disk()
 
 
@@ -223,6 +255,7 @@ class CollectSysMsg(TRun):
 		sqls.append(self._cpu_sql())
 		sqls.append(self._mem_sql())
 		sqls.append(self._disk_sql())
+		sqls.append(self._net_sql())
 		#for i in sqls:
 		#	print i
 		mysql.multiple_write(";".join(sqls))
@@ -235,11 +268,11 @@ class CollectSysMsg(TRun):
 		nr=[i for i in role.keys() if i not in o_role.keys()]
 		if nr:
 			role_sql='insert into roles (host_id,host_role,timestamp) values '
-			role_sql+=",".join(['("%s","%s","%d")' % (hid,r,timestamp) for r in nr])
+			role_sql+=",".join(['("%s","%s",%d)' % (hid,r,timestamp) for r in nr])
 		else:
 			role_sql=''
 		if o_role:
-			urole_sql='update roles set timestamp="%d" where host_id="%s" and host_role="%s"'
+			urole_sql='update roles set timestamp=%d where host_id="%s" and host_role="%s"'
 			urole_sql=';'.join([urole_sql %(timestamp,hid,i) for i in o_role.keys() if o_role[i]['status'] == 1])
 		else:
 			urole_sql=''
@@ -256,11 +289,11 @@ class CollectSysMsg(TRun):
 		unc=[(i,net[i]['ip']) for i in net.keys() if i in o_net.keys() and net[i]['ip'] != o_net[i]['ip']]
 		if nc:
 			ip_sql='insert into ips values '
-			ip_sql+=",".join(['("%s","%s","%s","%d")' % (hid,n[0],n[1],timestamp) for n in nc])
+			ip_sql+=",".join(['("%s","%s","%s",%d)' % (hid,n[0],n[1],timestamp) for n in nc])
 		else:
 			ip_sql=''
 		if unc:
-			uip_sql='update ips set timestamp="%d",host_ip="%s" where host_ifname="%s" and host_id="%s"'
+			uip_sql='update ips set timestamp=%d,host_ip="%s" where host_ifname="%s" and host_id="%s"'
 			uip_sql=';'.join([uip_sql % (timestamp,i[1],i[0],hid) for i in unc])
 		else:
 			uip_sql=''
@@ -273,13 +306,13 @@ class CollectSysMsg(TRun):
 		info=self.info
 		timestamp=self._now_time()
 		if o_info:
-			host_sql='update hosts set timestamp="%d"%s where host_id="%s"'
+			host_sql='update hosts set timestamp=%d%s where host_id="%s"'
 			if o_info['hostname'] != info['hostname']:
 				host_sql=host_sql %(timestamp,',host_name="%s"' % info['hostname'],hid)
 			else:
 				host_sql=host_sql %(timestamp,'',hid)
 		else:
-			host_sql='insert into hosts values ("%s","%s","%d")' %(hid,info['hostname'],timestamp)
+			host_sql='insert into hosts values ("%s","%s",%d)' %(hid,info['hostname'],timestamp)
 
 		return host_sql
 
@@ -287,14 +320,14 @@ class CollectSysMsg(TRun):
 		hid=self.host_id
 		timestamp=self._now_time()
 		cpu=self.info['cpu']
-		cpu_sql='insert into cpu values ("%s","%0.2f","%0.2f","%0.2f","%d")'
+		cpu_sql='insert into cpu values ("%s",%0.2f,%0.2f,%0.2f,%d)'
 		return cpu_sql % (hid,cpu['user'],cpu['system'],cpu['idle'],timestamp)
 
 	def _mem_sql(self):
 		hid=self.host_id
 		timestamp=self._now_time()
 		mem=self.info['mem']
-		mem_sql='insert into mem values ("%s","%d","%d","%d","%d","%d","%d","%d")'
+		mem_sql='insert into mem values ("%s",%d,%d,%d,%d,%d,%d,%d)'
 		return mem_sql % (hid,mem['total'],mem['used'],mem['free'],mem['shared'],mem['buffer'],mem['cached'],timestamp)
 
 	def _disk_sql(self):
@@ -302,10 +335,30 @@ class CollectSysMsg(TRun):
 		timestamp=self._now_time()
 		d=self.info['disk']
 		disk_sql='insert into disk values '
-		value='("%s","%s","%s","%s","%d","%d","%0.2f","%0.2f","%d")'
-		values=[value % (hid,k,v['disk'],v['fstype'],v['total'],v['used'],v['read'],v['write'],timestamp) for k,v in d.items()]
+		value='("%s","%s","%s","%s",%d,%d,%0.2f,%0.2f,%d)'
+		values=[]
+		disk_rate=self._disk_rate()
+		for k,v in d.items():
+			rrate=disk_rate[k]['read']
+			wrate=disk_rate[k]['write']
+			values.append(value % (hid,k,v['device'],v['fstype'],v['total'],v['used'],rrate,wrate,timestamp))
 		disk_sql+=','.join(values)
 		return disk_sql
+
+	def _net_sql(self):
+		hid=self.host_id
+		timestamp=self._now_time()
+		n=self.info['net']
+		net_sql='insert into net_io values '
+		value='("%s","%s",%0.2f,%0.2f,%d,%d,%d)'
+		values=[]
+		net_rate=self._net_rate()
+		for k,v in n.items():
+			rrate=net_rate[k]['recv']
+			srate=net_rate[k]['sent']
+			values.append(value %(hid,k,rrate,srate,v['link'],v['total_link'],timestamp))a
+		net_sql+=','.join(values)
+		return net_sql
 	
 
 	
