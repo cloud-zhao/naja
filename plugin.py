@@ -318,7 +318,7 @@ class RunPlugin(object):
 	def _run_dynamic(self):
 		sp = self.showPlugin
 		dynamicFunc = SchedulerFunc("DynamicImport",sp)
-		#self.queue.put(dynamicFunc)
+		self.queue.put(dynamicFunc)
 		dynamicRun = ProcessScheduler.create_func(dynamicFunc)
 		dynamicThread = threading.Thread(target=dynamicRun)
 		dynamicThread.setDaemon(True)
