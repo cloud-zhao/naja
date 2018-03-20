@@ -18,8 +18,10 @@ class RemoteConfig(MyConfig):
 		'remote_conf': None,
 		'remote_version': None,
 		'check_version': True,
-		'remote_server': "http://127.0.0.1:15050/source/naja",
+		'project_name': "naja",
+		'remote_server': "http://127.0.0.1:9200/source/naja",
 	}
+	logger=MyTools.getLogger(__name__+".RemoteConfig")
 
 	def __init__(self,**config):
 		self.conf=copy.copy(self.DEFAULT_CONFIG)
@@ -32,9 +34,9 @@ class RemoteConfig(MyConfig):
 		self.localFile=self.conf['local_conf']
 		basename=MyTools.basename(self.localFile,sp='.')
 		self.conf['remote_conf']="%s/%s" %(self.conf['remote_server'],self.conf['remote_conf']) if self.conf['remote_conf'] \
-					 else "%s/conf/%s" %(self.conf['remote_server'],MyTools.basename(self.localFile))
+					 else "%s/%s/%s" %(self.conf['remote_server'],self.conf['project_name'],MyTools.basename(self.localFile))
 		self.conf['remote_version']="%s/%s" %(self.conf['remote_server'],self.conf['remote_version']) if self.conf['remote_version'] \
-					 else "%s/version/%s.version" %(self.conf['remote_server'],basename)
+					 else "%s/%s/%s.version" %(self.conf['remote_server'],self.conf['project_name'],basename)
 		self.conf['local_version']=self.conf['local_version'] if self.conf['local_version'] \
 					 else "%s/%s.version" %(os.path.dirname(self.localFile),basename)
 
@@ -42,6 +44,7 @@ class RemoteConfig(MyConfig):
 			self._update_config_file()
 		assert os.path.exists(self.localFile),"%s file not found" %(self.localFile)
 		self.proper=Properties(self.localFile)
+		self.logger.info("init success.")
 
 	def update_config(self):
 		if self._check_version() or not os.path.exists(self.localFile):
@@ -49,7 +52,12 @@ class RemoteConfig(MyConfig):
 			self.proper=Properties(self.localFile)
 
 	def _update_config_file(self):
-		assert self.sh.get_file(self.conf['remote_conf'],self.localFile),"update local config file failed"
+		res=self.sh.get_file(self.conf['remote_conf'],self.localFile)
+		if res:
+			self.logger.info("update remote conf %s to local config %s success" %(self.conf['remote_conf'],self.localFile))
+		else:
+			self.logger.info("update remote conf %s to local config %s failed" %(self.conf['remote_conf'],self.localFile))
+		return res
 
 	def _check_version(self):
 		if not self.conf['check_version']:
@@ -61,7 +69,11 @@ class RemoteConfig(MyConfig):
 		else:
 			localVersion=('0','0','0')
 
-		configVersion=json.loads(self.sh.get_chunk(self.conf['remote_version']))
+		try:
+			configVersion=json.loads(self.sh.get_chunk(self.conf['remote_version']))
+		except:
+			self.logger.error("version config json loads failed")
+			configVersion={'version':'0.0.0'}
 		remoteVersion=tuple(configVersion['version'].split('.'))
 
 		if remoteVersion>localVersion:

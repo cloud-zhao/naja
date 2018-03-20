@@ -11,6 +11,7 @@ import fcntl
 import struct
 import json
 import psutil
+import logging
 from naja.error import SysProcError,ConfigFileError
 
 
@@ -18,6 +19,10 @@ class MyTools(object):
 	@staticmethod
 	def get_abs_path(p):
 		return os.path.split(os.path.realpath(p))[0]
+
+	@staticmethod
+	def get_abs_file(p):
+		return os.path.realpath(p)
 
 	@staticmethod
 	def get_uuid(constant=False):
@@ -84,6 +89,19 @@ class MyTools(object):
 			return string.split(sp)[0]
 		else:
 			return string[:len(string)-len(suffix)]
+
+	@staticmethod
+	def getLogger(name):
+		logging.basicConfig(level=logging.INFO,format='%(asctime)s %(name)s %(levelname)s %(lineno)d %(message)s')
+		return logging.getLogger(name)
+
+	@staticmethod
+	def load_config(default,config):
+		conf = copy.copy(default)
+		for i in conf:
+			if i in config:
+				conf[i]=config[i]
+		return conf
 
 
 class SysPs(object):
@@ -176,12 +194,12 @@ class Properties(object):
 				fh.close()
 
 	def _analysis_value(self,value):
-		if value.find(':') > -1:
+		if value.find('::') > -1:
 			res={}
-			for j in value.split(','):
-				k,v=j.split(':')
+			for j in value.split(',,'):
+				k,v=j.split('::')
 				res[k.strip()]=v.strip()
-		elif value.find(',') > -1:
+		elif value.find(',,') > -1:
 			res=map(lambda v:v.strip(),value.split(','))
 		else:
 			res=value.strip()

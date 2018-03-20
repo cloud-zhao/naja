@@ -4,6 +4,7 @@ import json
 import urllib
 import urllib2
 from kafka import KafkaProducer
+from naja.util import MyTools
 
 
 
@@ -48,6 +49,7 @@ class SendHttp(SendInfoInterface):
 		'data':{},
 		'url':None,
 	}
+	logger = MyTools.getLogger(__name__+".SendHttp")
 
 	def send_info(self,**config):
 		conf=copy.copy(self.DEFAULT_CONFIG)
@@ -60,28 +62,27 @@ class SendHttp(SendInfoInterface):
 		res=None
 		req=urllib2.Request(url=conf['url'])
 		if conf['data']:
-			dataEncode=urllib.urlencode(conf['data'])
-			req.add_data(dataEncode)
+			#dataEncode=urllib.urlencode(conf['data'])
+			#req.add_data(dataEncode)
+			req.add_data(conf['data'])
 		req.get_method = lambda: conf['method']
 		for headerKey in conf['header']:
 			req.add_header(headerKey,conf['header'][headerKey])
 		try:
 			res=urllib2.urlopen(req)
 		except urllib2.HTTPError,e:
-			print e.getcode()
-			print e.message
+			self.logger.error("send request failed. Code: %d Msg: %s" %(e.getcode(),e.message))
 		except urllib2.URLError,e:
-			print e.reason
+			self.logger.error("url error. ",e.reason)
 		except:
-			pass
+			self.logger.error("unknown error.")
 		return res
 
 	def get_chunk(self,url):
 		res=self.send_info(url=url, method="GET")
+		buf=None
 		if res:
 			buf=res.read()
-		else:
-			buf=""
 		return buf
 
 	def get_file(self, url, localfile):
@@ -104,6 +105,11 @@ class SendHttp(SendInfoInterface):
 
 
 class SendKafka(SendInfoInterface):
+	"""
+		send kafka message
+	"""
+	logger = MyTools.getLogger(__name__+".SendKafka")
+
 	def __init__(self,server):
 		self.servers=server.split(",")
 		assert self.servers,"server not null"
