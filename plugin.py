@@ -190,8 +190,8 @@ class ProcessScheduler(Process):
 					self.threadList.append(p)
 				else:
 					self._size()
-			except Exception,e:
-				self.logger.error(e,exc_info=1)
+			except:
+				self.logger.exception("runFunc failed.")
 
 	def run(self):
 		self.runFunc()
@@ -219,27 +219,70 @@ class ProcessScheduler(Process):
 					time.sleep(40)
 		return _func_
 
-class SchedulerFork(Process):
+class ProcessFork(Process):
 	"""
 	Scheduler fork
 	"""
-	logger = MyTools.getLogger(__name__+".SchedulerFork")
+	logger = MyTools.getLogger(__name__+".ProcessFork")
+	DEFAULT = {
+		"daemon_list":[],
+		"check_alive":True,
+		"check_interval":30
+	}
 
-	def __init__(self,**func):
+	def __init__(self,**config):
 		Process.__init__(self)
-		self.func=func
-		self.thread=[]
+		self.conf=MyTools.load_config(self.DEFAULT,config)
+		self.dList=self.conf['daemon_list']
+		self.dList=self.dList if isinstance(self.dList,list) else []
+		self.thread={}
+
+	def _createThread(self,i):
+		p=threading.Thread(target=i.run)
+		p.setDaemon(True)
+		return p
+
+	def runFunc(self):
+		for i in self.dList:
+			try:
+				p=self._createThread(i.obj)
+				self.thread[p]=i
+				p.start()
+			except:
+				self.logger.exception("runing dRun failed")
+
+	def checkFunc(self):
+		dThread=[]
+		for i in self.thread:
+			if not i.is_alive():
+				dThread.append(i)
+		return dThread
 
 	def run(self):
-		for i in self.func:
-			self.logger.info("run %s" % i)
-			p=threading.Thread(target=self.func[i])
-			self.thread.append(p)
-		for i in self.thread:
-			i.setDaemon(True)
-			i.start()
-		for i in self.thread:
-			i.join()
+		if not self.dList:
+			return
+		self.runFunc()
+		if self.conf['check_alive']:
+			self._checkAlive()
+		else:
+			for i in self.thread:
+				i.join()
+
+	def _checkAlive(self):
+		name=""
+		while 1:
+			try:
+				dt=self.checkFunc()
+				for i in dt:
+					sf=self.thread[i]
+					name=sf.name
+					p=self._createThread(sf.obj)
+					self.thread[p]=sf
+					del self.thread[i]
+					p.start()
+			except:
+				self.logger.exception("check %s DRun failed." %name)
+			time.sleep(self.conf['check_interval'])
 
 
 class RunPlugin(object):
@@ -265,6 +308,7 @@ class RunPlugin(object):
 		self.alreadyD = {}
 		self.queue = Queue(self.processNumber)
 		self.procScheduler = None
+		self.procForks = []
 
 	def _get_T(self):
 		tf={}
@@ -297,21 +341,16 @@ class RunPlugin(object):
 			self.logger.info(str(tf[i].run))
 
 	def _run_D(self,df):
-		dp = []
+		drunList=[]
+		if not df:
+			return
 		for i in df:
-			def _r_d_():
-				try:
-					df[i].run()
-				except Exception,e:
-					self.logger.error(e,exc_info=1)
-			if i.get_daemon_level() == 0:
-				dThread = threading.Thread(target=_r_d)
-				dThread.setDaemon(True)
-			else:
-				dThread = Process(target=_r_d)
-				dThread.daemon=True
-			dp.append(dThread)
-		return dp
+			drunList.append(SchedulerFunc(i,df[i]))
+		pf=ProcessFork(daemon_list = drunList)
+		pf.daemon=True
+		pf.start()
+		self.procForks.append(pf)
+
 
 	def _run_dynamic(self):
 		sp = self.showPlugin
@@ -342,7 +381,8 @@ class RunPlugin(object):
 
 	def run(self):
 		self._create_scheduler()
-		self.procScheduler.start()
+		if self.procScheduler:
+			self.procScheduler.start()
 		self._run_dynamic()
 		while 1:
 			try:
