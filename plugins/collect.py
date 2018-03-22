@@ -13,11 +13,11 @@ from naja.config import RemoteConfig
 from naja.plugin import TRun
 from naja.plugin import DRun
 
-class CollectSysMsg():
+class CollectSysMsg(TRun):
 	PROJECT_NAME = "naja"
 	DEFAULT_CONFIG={
 		'send_type':None,
-		'send_func':lambda jinfo: sys.stdout.write(str(jinfo)+'\n')
+		'send_func':None,
 	}
 	MYSQL_CONFIG={
 		'mysql_host':None,
@@ -33,7 +33,7 @@ class CollectSysMsg():
 	REMOTE_CONFIG={
 		'local_conf':"%s/s.properties" % (MyTools.get_abs_path(__file__)),
 		'local_version': None,
-		'remote_server':"http://172.17.124.208:9200/source/naja"
+		'remote_server':"http://172.17.124.208:9200/naja/source"
 	}
 
 	logger = MyTools.getLogger(__name__+".CollectSysMsg")
@@ -193,16 +193,20 @@ class CollectSysMsg():
 		r_net={}	#ifName is key
 		for i in MyTools.get_netcard():
 			i_net[i[1]]=r_net[i[0]]={"ip":i[1],"recv":0,"sent":0,"link":0,"total_link":0}
-		links=psutil.net_connections()
-		flow=psutil.net_io_counters(pernic=True)
+		try:
+			links=psutil.net_connections()
+			flow=psutil.net_io_counters(pernic=True)
+		except:
+			links=[]
+			flow={}
 		for i in links:
 			if i_net.has_key(i.laddr.ip):
 				i_net[i.laddr.ip]['link']+=1
 		for i in i_net:
 			i_net[i]['total_link']=len(links)
 		for i in r_net:
-			r_net[i]['recv']=flow[i].bytes_recv
-			r_net[i]['sent']=flow[i].bytes_sent
+			r_net[i]['recv']=flow[i].bytes_recv if flow else 0
+			r_net[i]['sent']=flow[i].bytes_sent if flow else 0
 		return r_net
 
 	def _net_rate(self):
@@ -233,13 +237,13 @@ class CollectSysMsg():
 	def run(self):
 		rc=self.rc
 		rc.update_config()
-		conf=rc.get_config(self.PROJECT_NAME)
+		conf=rc.get_config(self.PROJECT_NAME,{})
 		for i in self.REMOTE_CONFIG:
 			if conf.has_key(i) and conf[i] != self.conf[i]:
 				self.rc=RemoteConfig(project_name=self.PROJECT_NAME,**conf)
 				break
 		for i in self.MYSQL_CONFIG:
-			if conf.has_key(i) and conf[i] != self.conf[i]:
+			if conf.has_key(i) and conf[i] != self.conf[i] and self.mysql:
 				self.mysql.close()
 				self.mysql=None
 				break
@@ -257,11 +261,17 @@ class CollectSysMsg():
 				self.send_mysql()
 			else:
 				jinfo=json.dumps(self.info)
-				self.conf['send_func'](jinfo)
+				if self.conf['send_func']:
+					self.conf['send_func'](jinfo)
+				else:
+					self._send_func(jinfo)
 			self.old_info=copy.copy(self.info)
 			self._write_old_info()
 		except Exception,e:
 			print(e)
+
+	def _send_func(self,jinfo):
+		print jinfo
 
 	def send_ser(self):
 		url=self.conf['ser_url']

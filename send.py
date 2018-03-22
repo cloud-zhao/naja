@@ -52,11 +52,7 @@ class SendHttp(SendInfoInterface):
 	logger = MyTools.getLogger(__name__+".SendHttp")
 
 	def send_info(self,**config):
-		conf=copy.copy(self.DEFAULT_CONFIG)
-		for key in conf:
-			if key in config:
-				conf[key]=config[key]
-
+		conf=MyTools.load_config(self.DEFAULT_CONFIG,config)
 		assert conf['url'],"url not null"
 
 		res=None
@@ -71,9 +67,9 @@ class SendHttp(SendInfoInterface):
 		try:
 			res=urllib2.urlopen(req)
 		except urllib2.HTTPError,e:
-			self.logger.error("send request failed. Code: %d Msg: %s" %(e.getcode(),e.message))
+			self.logger.error("send request %s failed. Code: %d Msg: %s" %(conf['url'],e.getcode(),e.message))
 		except urllib2.URLError,e:
-			self.logger.error("url error. ",e.reason)
+			self.logger.error("url error. "+e.reason)
 		except:
 			self.logger.error("unknown error.")
 		return res

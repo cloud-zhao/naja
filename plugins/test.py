@@ -39,33 +39,33 @@ class MyT1(TRun):
 	def main(configFile):
 		return MyT1(configFile)
 
-class MyT2(TRun):
-	logger = MyTools.getLogger(__name__+".MyT2")
-	def __init__(self,config):
-		self.cf = config
-	def get_sleep(self):
-		return 3
-	def get_schedule(self):
-		return 15
-	def run(self):
-		self.logger.info("run MyT2 from test.py,config: %s" %self.cf)
+#class MyT2(TRun):
+#	logger = MyTools.getLogger(__name__+".MyT2")
+#	def __init__(self,config):
+#		self.cf = config
+#	def get_sleep(self):
+#		return 3
+#	def get_schedule(self):
+#		return 15
+#	def run(self):
+#		self.logger.info("run MyT2 from test.py,config: %s" %self.cf)
 
-	@staticmethod
-	def main(configFile):
-		return MyT2(configFile)
+#	@staticmethod
+#	def main(configFile):
+#		return MyT2(configFile)
 
 
-class MyTa(TRun):
-    logger = MyTools.getLogger(__name__+".MyTa")
-    def __init__(self,config):
-        self.cf = config
-    def get_sleep(self):
-        return 3
-    def get_schedule(self):
-        return 4
-    def run(self):
-        self.logger.info("run MyTa from test.py,config: %s" %self.cf)
+#class MyTa(TRun):
+#    logger = MyTools.getLogger(__name__+".MyTa")
+#    def __init__(self,config):
+#        self.cf = config
+#    def get_sleep(self):
+#        return 3
+#    def get_schedule(self):
+#        return 4
+#    def run(self):
+#        self.logger.info("run MyTa from test.py,config: %s" %self.cf)
 
-    @staticmethod
-    def main(configFile):
-        return MyTa(configFile)
+#    @staticmethod
+#    def main(configFile):
+#        return MyTa(configFile)

@@ -10,6 +10,7 @@ from Queue import Empty,Full
 from multiprocessing import Process,Queue
 from naja.util import Properties,MyTools
 from naja.send import SendHttp
+from naja.config import RemoteConfig
 from collections import namedtuple
 
 
@@ -255,13 +256,10 @@ class RunPlugin(object):
 	logger = MyTools.getLogger(__name__+".RunPlugin")
 
 	def __init__(self,**config):
-		self.conf = copy.copy(self.DEFAULT_CONFIG)
-		for i in self.conf:
-			if i in config:
-				self.conf[i]=config[i]
+		self.conf = MyTools.load_config(self.DEFAULT_CONFIG,config)
 		self.processNumber=self.conf['processNumber']
 		assert self.conf['configFile'],"configFile parameters must be set"
-		self.proper = Properties(self.conf['configFile'])
+		self.remoteConfig=RemoteConfig(local_conf=self.conf['configFile'],project_name="naja")
 		self.showPlugin=DynamicImport()
 		self.alreadyF = {}
 		self.alreadyD = {}
@@ -275,7 +273,7 @@ class RunPlugin(object):
 		for i in spt:
 			if i not in self.alreadyF:
 				self.alreadyF[i]=spt[i]
-				f=spt[i].main(self.proper.get_value("%s.%s" %(self.conf['configPrefix'],i),""))
+				f=spt[i].main(self.remoteConfig.get_config("%s.%s" %(self.conf['configPrefix'],i),""))
 				if f:
 					tf[i]=f
 		return tf
@@ -286,7 +284,7 @@ class RunPlugin(object):
 		for i in spd:
 			if i not in self.alreadyD:
 				self.alreadyD[i]=spd[i]
-				f=spd[i].main(self.proper.get_value("%s.%s" %(self.conf['configPrefix'],i),""))
+				f=spd[i].main(self.remoteConfig.get_config("%s.%s" %(self.conf['configPrefix'],i),""))
 				if f:
 					tf[i]=f
 		return tf
@@ -326,6 +324,7 @@ class RunPlugin(object):
 		return dynamicThread
 		
 	def _load_TD(self):
+		self.remoteConfig.update_config()
 		works = []
 		tf = self._get_T()
 		self._run_T(tf)

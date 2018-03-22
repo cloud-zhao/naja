@@ -12,7 +12,7 @@ import struct
 import json
 import psutil
 import logging
-from naja.error import SysProcError,ConfigFileError
+from naja.error import ConfigFileError
 
 
 class MyTools(object):
@@ -83,6 +83,15 @@ class MyTools(object):
 		return pwd.getpwuid(os.getuid())[0]
 
 	@staticmethod
+	def dirname(pathStr,pwd=False):
+		dirname=os.path.dirname(pathStr)
+		return dirname
+
+	@staticmethod
+	def exists(pathStr):
+		return os.path.exists(pathStr)
+
+	@staticmethod
 	def basename(pathStr,suffix='',sp=None):
 		string=os.path.basename(pathStr)
 		if sp:
@@ -92,7 +101,7 @@ class MyTools(object):
 
 	@staticmethod
 	def getLogger(name):
-		logging.basicConfig(level=logging.INFO,format='%(asctime)s %(name)s %(levelname)s %(lineno)d %(message)s')
+		logging.basicConfig(level=logging.INFO,format='%(asctime)s-%(name)s-%(levelname)s-line %(lineno)d-%(message)s')
 		return logging.getLogger(name)
 
 	@staticmethod
@@ -103,23 +112,31 @@ class MyTools(object):
 				conf[i]=config[i]
 		return conf
 
-
 class SysPs(object):
 	ppath="/proc"
 	cmd="cmdline"
 
 	def __init__(self):
+		self.ps = False
 		if not os.path.isdir(self.ppath):
-			raise SysProcError("/proc not exists")
+			self.ps=True
 			
 
 	def _get_pid(self):
 		command={}
+		if self.ps:
+			for i in psutil.pids():
+				try:
+					p=psutil.Process(i)
+					command[i]=p.cmdline()
+				except:
+					pass
+			return command
 		for i in os.listdir(self.ppath):
 			if i.isdigit():
 				try:
 					fh=open(self.ppath+"/"+i+"/"+self.cmd,"r")
-					command[int(i)]=fh.read()
+					command[int(i)]=fh.read().split(chr(0))
 				except:
 					pass
 				finally:
@@ -128,33 +145,28 @@ class SysPs(object):
 		return command
 
 	def get_process(self,pid=None,cmd=None):
+		res={}
 		if pid == None and cmd == None:
-			return {}
+			return res
 
 		clist=self._get_pid()
 		if pid != None and pid in clist:
 			return {pid:clist[pid].split(chr(0))}
 		elif cmd != None:
-			res={}
-			for i in clist.keys():
+			for i in clist:
 				conditionList=cmd.split('|')
 				conditionNum=0
 				for c in conditionList:
-					if clist[i].find(c) > -1:
+					if c in clist[i]:
 						conditionNum += 1
 				if conditionNum == len(conditionList):
-					res[i]=clist[i].split(chr(0))
+					res[i]=clist[i]
 			return res
 		else:
-			return {}
+			return res
 
 	def all(self):
-		clist=self._get_pid()
-		rc={}
-		for i in clist.keys():
-			#print "Pid: %s %s" % (i," ".join(clist[i].split(chr(0))))
-			rc[i]=clist[i].split(chr(0))
-		return rc
+		return self._get_pid()
 
 	def check_active(self,pid):
 		clist=self._get_pid()

@@ -4,7 +4,6 @@ from naja.util import (
 	Properties
 )
 from naja.error import (
-	SysProcError,
 	ConfigFileError,
 	ConfigFieldError
 )
