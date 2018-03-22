@@ -4,3 +4,5 @@
 *.pyc
 target/
 .DS_Store
+*.json
+*.uuid
