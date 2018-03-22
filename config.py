@@ -6,11 +6,6 @@ from naja.send import SendHttp
 
 class MyConfig(object):
 	base=MyTools.get_abs_path(__file__)
-	selfName="naja"
-	configFile="%s/%s.properties" % (base,selfName)
-
-
-class RemoteConfig(MyConfig):
 	DEFAULT_CONFIG={
 		'local_conf': None,
 		'local_version': None,
@@ -20,11 +15,12 @@ class RemoteConfig(MyConfig):
 		'project_name': "naja",
 		'remote_server': "http://172.17.124.208:9200/naja/source",
 	}
-	logger=MyTools.getLogger(__name__+".RemoteConfig")
+	logger=MyTools.getLogger(__name__+".MyConfig")
 
 	def __init__(self,**config):
 		self.conf=MyTools.load_config(self.DEFAULT_CONFIG,config)
 		assert self.conf['local_conf'],"parameter local_conf not setup"
+		assert self.conf['remote_server'],"parameter remote_server not setup"
 
 		self.sh=SendHttp()
 		self.localFile=self.conf['local_conf']
@@ -39,7 +35,6 @@ class RemoteConfig(MyConfig):
 		if self._check_version() or not MyTools.exists(self.localFile):
 			self._update_config_file()
 		assert MyTools.exists(self.localFile),"%s file not found" %(self.localFile)
-		self.proper=Properties(self.localFile)
 		self.logger.info("init success.")
 
 	def _abs_conf(self):
@@ -55,8 +50,8 @@ class RemoteConfig(MyConfig):
 
 	def update_config(self):
 		if self._check_version() or not MyTools.exists(self.localFile):
-			self._update_config_file()
-			self.proper=Properties(self.localFile)
+			return self._update_config_file()
+		return False
 
 	def _update_config_file(self):
 		res=self.sh.get_file(self.conf['remote_conf'],self.localFile)
@@ -70,18 +65,18 @@ class RemoteConfig(MyConfig):
 		if not self.conf['check_version']:
 			return self.conf['check_version']
 		localVersionFile=self.conf['local_version']
-		if MyTools.exists(localVersionFile):
+		try:
 			configVersion=self.sh.get_local_info(localVersionFile)
 			localVersion=tuple(configVersion['version'].split('.'))
-		else:
+		except:
+			self.logger.exception("local version fetch failed. use default version 0.0.0")
 			localVersion=('0','0','0')
 
 		try:
 			configStr=self.sh.get_chunk(self.conf['remote_version'])
 			configVersion=json.loads(configStr)
-		except Exception,e:
-			self.logger.error("version config json loads failed")
-			self.logger.error(e,exc_info=1)
+		except:
+			self.logger.exception("version config json loads failed")
 			configVersion={'version':'0.0.0'}
 		remoteVersion=tuple(configVersion['version'].split('.'))
 
@@ -89,7 +84,29 @@ class RemoteConfig(MyConfig):
 			self.sh.write_local_info(localVersionFile,configVersion)
 		return remoteVersion>localVersion
 
+
+class RemoteConfig(MyConfig):
+	logger = MyTools.getLogger(__name__+".RemoteConfig")
+
+	def __init__(self,**config):
+		MyConfig.__init__(self,**config)
+		self.proper = Properties(self.localFile)
+
 	def get_config(self,key,default=None):
 		return self.proper.get_value(key,default)
 
+	def update_config(self):
+		res=super().update_config()
+		if res:
+			self.proper = Properties(self.localFile)
+		return res
+
+class UpdateCode(MyConfig):
+	logger = MyTools.getLogger(__name__+".UpdateCode")
+
+	def __init__(self,**config):
+		MyConfig.__init__(self,**config)
+
+	def update_code(self):
+		return self.update_config()
 

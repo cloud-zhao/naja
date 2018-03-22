@@ -101,7 +101,7 @@ class MyTools(object):
 
 	@staticmethod
 	def getLogger(name):
-		logging.basicConfig(level=logging.INFO,format='%(asctime)s-%(name)s-%(levelname)s-line %(lineno)d-%(message)s')
+		logging.basicConfig(level=logging.INFO,format='%(asctime)s %(name)s %(lineno)d %(levelname)s %(message)s')
 		return logging.getLogger(name)
 
 	@staticmethod

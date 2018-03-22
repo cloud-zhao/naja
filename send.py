@@ -12,6 +12,7 @@ class SendInfoInterface(object):
 	"""
 	first send info hostid set NULL
 	"""
+	logger = MyTools.getLogger(__name__+".SendInfoInterface")
 
 	def get_local_chunk(self,rfile):
 		if not os.path.isfile(rfile):
@@ -25,7 +26,11 @@ class SendInfoInterface(object):
 
 	def get_local_info(self, rfile):
 		buf=self.get_local_chunk(rfile)
-		return json.loads(buf)
+		try:
+			return json.loads(buf)
+		except:
+			self.logger.warning("json loads failed. %s" %str(buf))
+			return {}
 
 	def write_local_chunk(self, wfile, info):
 		try:
@@ -36,7 +41,12 @@ class SendInfoInterface(object):
 			return False
 
 	def write_local_info(self,wfile,info):
-		self.write_local_chunk(wfile,json.dumps(info))
+		try:
+			jsonStr=json.dumps(info)
+			return self.write_local_chunk(wfile,jsonStr)
+		except:
+			self.logger.warnning("write json to file failed. %s %s" %(str(wfile),str(info)))
+			return False
 
 	def send_info(self, jsonDict):
 		pass
