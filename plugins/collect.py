@@ -12,7 +12,9 @@ from naja.mysql import MysqlDB
 from naja.config import RemoteConfig
 from naja.plugin import TRun
 from naja.plugin import DRun
+from collections import namedtuple
 
+Host=namedtuple("Host",['hostId','hostName','user','ip','mem','cpu','net','disk','proc','role'])
 class CollectSysMsg(TRun):
 	PROJECT_NAME = "naja"
 	DEFAULT_CONFIG={
@@ -267,8 +269,8 @@ class CollectSysMsg(TRun):
 					self._send_func(jinfo)
 			self.old_info=copy.copy(self.info)
 			self._write_old_info()
-		except Exception,e:
-			print(e)
+		except:
+			self.logger.exception("send failed.")
 
 	def _send_func(self,jinfo):
 		print jinfo
@@ -285,8 +287,8 @@ class CollectSysMsg(TRun):
 		data=json.dumps(self._create_host())
 		try:
 			res=self.sendHttp.send_info(url=url,header=header,data=data)
-		except e:
-			print e
+		except:
+			self.logger.exception("send http server failed.")
 		
 
 	def send_mysql(self):
@@ -481,4 +483,169 @@ class CollectSysMsg(TRun):
 		proc=self.info['proc']
 
 		return {'hostId':hid,'hostName':hname,'user':user,'ip':ip,'mem':mem,'cpu':cpu,'net':net,'disk':disk,'proc':proc,'role':role}
+
+
+#表示一个yarn的container
+Container=namedtuple("Container",["hostId","appId","containerId"])
+#表示一台主机上所有非appMaster类型的container
+HostContainer=namedtuple("HostContainer",["hostId","containers"])
+
+#表示一个spark app 其中containers表示这个app所有的container
+SparkApp=namedtuple("SparkApp",["hostId","appId","userClass","appName","containers"])
+#表示一个主机上所有的spark app drive
+HostApp=namedtuple("HostApp",["hostId","apps"])
+
+#表示一个主机上所有的任务
+HostJob=namedtuple("HostJob",["hostId","hostApp","hostContainer"])
+class CollectYarnAppMsg():
+	"""
+	Collect yarn application message
+	Parameter:
+		keyword = {
+			"containerRole":"cmdlineKeyword"
+		}
+		func = {
+			"containerRole":Function(containerRole,cmdlineKeyword) return List(dict(id:T),dict(id:List[R]))
+		}
+	"""
+	DEFAULT={
+		"keyword":{},
+		"func":{},
+	}
+	KEYWORD={
+		"drive":"org.apache.spark.deploy.yarn.ApplicationMaster",
+		"executor":"org.apache.spark.executor.CoarseGrainedExecutorBackend"
+	}
+	logger = MyTools.getLogger(__name__+".CollectYarnAppMsg")
+
+	def __init__(self,**config):
+		self.conf = MyTools.load_config(self.DEFAULT,config)
+		self.ps = SysPs()
+		self.conf["keyword"].update(self.KEYWORD)
+		self.keyword = self.conf["keyword"]
+		self.func = self.conf['func']
+		self.host_id = MyTools.get_uuid(True)
 	
+	"""
+	return HostJob(hostId="",hostApp=HostApp,hostContainer=HostContainer)
+	{	"hostId":"",
+		"hostApp":{	"hostId":"",
+					"apps":[{
+							"hostId":"xx",
+							"appId":"xx",
+							"userClass":"xx",
+							"appName":"xx",
+							"containers":[Container._asdict,...]},
+							{...}
+					]
+		},
+		"hostContainer":{"hostId":"xx",
+					"containers":[{
+							"hostId":"xx",
+							"appId":"xx",
+							"containerId":"xx"},
+							{...}
+					]
+		}
+	}
+	"""
+	def get_app(self):
+		res=self._get_app_all()
+		hostApp=HostApp(self.host_id,res[0])
+		hostContainer=HostContainer(self.host_id,res[1])
+		return MyTools.namedtuple_dict(HostJob(self.host_id,hostApp,hostContainer))
+
+	def _get_app_all(self):
+		apps=[]
+		containers=[]
+		res=self._get_app()
+		apps.extend(res[0])
+		containers.extend(res[1])
+		for k,v in self.keyword.items():
+			if k not in self.KEYWORD.keys():
+				res=self._get_self_app(k,v)
+				apps.extend(res[0])
+				containers.extend(res[1])
+		return [apps,containers]
+
+	def _get_self_app(self,app_role,cmd):
+		func=self.func[app_role]
+		res=[]
+		if callable(func):
+			try:
+				res=func(app_role,cmd)
+			except:
+				self.logger.warning("self get_app failed. %s : %s" %(app_role,cmd))
+		if isinstance(res,list) and res and len(res) == 2:
+			if isinstance(res[0],dict) and isinstance(res[1],dict):
+					return self._set_app_container(res[0],res[1])
+		return [[],[]]
+
+	def _get_app(self):
+		dl=self._get_drive()
+		el=self._get_executor()
+		return self._set_app_container(dl,el)
+
+	def _set_app_container(self,drive_list,executor_list):
+		for appid,app in drive_list.items():
+			if executor_list.has_key(appid):
+				app.containers.extend(executor_list[appid])
+				del executor_list[appid]
+		el_values=[]
+		for i in executor_list.values():
+			el_values.extend(i)
+		return [drive_list.values(),el_values]
+		
+	def _get_drive(self):
+		app_list={}
+		proc=self.ps.get_process(cmd=self.keyword['drive'])
+		for pid,cmdline in proc.items():
+			if cmdline[0] == "/bin/bash" and len(cmdline) == 3:
+				continue
+			appid=self._get_appid(cmdline)
+			appmsg=self._get_drive_msg(cmdline)
+			if appid and len(appid) == 2:
+				container=Container(self.host_id,appid[0],appid[1])
+				if appmsg and len(appmsg) == 2:
+					app_list[appid[0]]=SparkApp(self.host_id,appid[0],appmsg[0],appmsg[1],[container])
+		return app_list
+
+	def _get_executor(self):
+		app_list={}
+		proc=self.ps.get_process(cmd=self.keyword['executor'])
+		for pid,cmdline in proc.items():
+			if cmdline[0] == "/bin/bash" and len(cmdline) == 3:
+				continue
+			appid=self._get_appid(cmdline)
+			if appid and len(appid) == 2:
+				container=Container(self.host_id,appid[0],appid[1])
+				if app_list.has_key(appid[0]):
+					app_list[appid[0]].append(container)
+				else:
+					app_list[appid[0]]=[container]
+		return app_list
+
+	def _get_drive_msg(self,cmdline):
+		param=[]
+		for i in range(len(cmdline)):
+			if cmdline[i] == "--class":
+				param.append(cmdline[i+1])
+			elif cmdline[i] == "--properties-file":
+				param.append(cmdline[i+1])
+		try:
+			p=Properties(param[1])
+			app_name=p.get_value("spark.app.name")
+		except:
+			app_name=None
+		if len(param) == 2:
+			return [param[0],app_name]
+		else:
+			return []
+
+	def _get_appid(self,cmdline):
+		cmd_keyword="-Djava.io.tmpdir"
+		for i in cmdline:
+			if cmd_keyword in i:
+				v=i.split("/")
+				return v[-3:-1]
+		return []
