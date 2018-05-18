@@ -24,20 +24,20 @@ from naja.util import MyTools
 #		return 0
 
 
-class MyT1(TRun):
-	logger = MyTools.getLogger(__name__+".MyT1")
-	def __init__(self,config):
-		self.cf = config
-	def get_sleep(self):
-		return 10
-	def get_schedule(self):
-		return 5
-	def run(self):
-		self.logger.info("run MyT1 from test.py,config: %s" %self.cf)
+#class MyT1(TRun):
+#	logger = MyTools.getLogger(__name__+".MyT1")
+#	def __init__(self,config):
+#		self.cf = config
+#	def get_sleep(self):
+#		return 10
+#	def get_schedule(self):
+#		return 5
+#	def run(self):
+#		self.logger.info("run MyT1 from test.py,config: %s" %self.cf)
 
-	@staticmethod
-	def main(configFile):
-		return MyT1(configFile)
+#	@staticmethod
+#	def main(configFile):
+#		return MyT1(configFile)
 
 #class MyT2(TRun):
 #	logger = MyTools.getLogger(__name__+".MyT2")

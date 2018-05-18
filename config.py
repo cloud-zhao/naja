@@ -47,7 +47,7 @@ class MyConfig(object):
 			dirname=MyTools.dirname(self.localFile)
 			if not MyTools.exists(dirname):
 				self.logger.warning("The %s where the local_conf is located does not exist" %(dirname))
-				self.localFile="%s/%s" %(base,MyTools.basename(self.localFile))
+				self.localFile="%s/%s" %(self.base,MyTools.basename(self.localFile))
 			else:
 				self.localFile="%s/%s" %(MyTools.get_abs_file(dirname),MyTools.basename(self.localFile))
 
@@ -99,7 +99,7 @@ class RemoteConfig(MyConfig):
 		return self.proper.get_value(key,default)
 
 	def update_config(self):
-		res=super().update_config()
+		res=super(RemoteConfig,self).update_config()
 		if res:
 			self.proper = Properties(self.localFile)
 		return res
