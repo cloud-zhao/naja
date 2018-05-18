@@ -326,7 +326,7 @@ class RunPlugin(object):
 				cf=self.remoteConfig.get_config("%s.%s" %(self.conf['configPrefix'],i))
 				if not cf:
 					continue
-				f=spt[i].main(self.remoteConfig.copy(cf)))
+				f=spt[i].main(self.remoteConfig.copy(cf))
 				if f:
 					tf[i]=f
 		return tf
