@@ -37,6 +37,9 @@ class MyConfig(object):
 		assert MyTools.exists(self.localFile),"%s file not found" %(self.localFile)
 		self.logger.info("init success.")
 
+	def copy(self,conf_file):
+		pass
+
 	def _abs_conf(self):
 		if MyTools.exists(self.localFile):
 			self.localFile=MyTools.get_abs_file(self.localFile)
@@ -101,6 +104,9 @@ class RemoteConfig(MyConfig):
 			self.proper = Properties(self.localFile)
 		return res
 
+	def copy(self,conf_file):
+		return RemoteConfig(remote_server=self.conf['remote_server'],local_conf=conf_file)
+
 class UpdateCode(MyConfig):
 	logger = MyTools.getLogger(__name__+".UpdateCode")
 
@@ -109,4 +115,7 @@ class UpdateCode(MyConfig):
 
 	def update_code(self):
 		return self.update_config()
+
+	def copy(self,conf_file):
+		return UpdateCode(remote_server=self.conf['remote_server'],local_conf=conf_file)
 

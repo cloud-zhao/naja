@@ -19,7 +19,7 @@ class MyPlugin(object):
 	def run(self):
 		pass
 	@staticmethod
-	def main(configFile):
+	def main(remoteConfig):
 		return None
 class TRun(MyPlugin):
 	def get_sleep(self):
@@ -293,7 +293,8 @@ class RunPlugin(object):
 	DEFAULT_CONFIG = {
 			"processNumber":8,
 			"configFile":None,
-			"configPrefix":"config.file"
+			"configPrefix":"config.file",
+			"remoteServer":None
 	}
 
 	logger = MyTools.getLogger(__name__+".RunPlugin")
@@ -301,8 +302,13 @@ class RunPlugin(object):
 	def __init__(self,**config):
 		self.conf = MyTools.load_config(self.DEFAULT_CONFIG,config)
 		self.processNumber=self.conf['processNumber']
+
 		assert self.conf['configFile'],"configFile parameters must be set"
-		self.remoteConfig=RemoteConfig(local_conf=self.conf['configFile'],project_name="naja")
+		assert self.conf['remoteServer'],"remoteServer parameters must be set"
+
+		cf=self.conf['configFile']
+		rs=self.conf['remoteServer']
+		self.remoteConfig=RemoteConfig(local_conf=cf,remote_server=rs,project_name="naja")
 		self.showPlugin=DynamicImport()
 		self.alreadyF = {}
 		self.alreadyD = {}
@@ -317,7 +323,7 @@ class RunPlugin(object):
 		for i in spt:
 			if i not in self.alreadyF:
 				self.alreadyF[i]=spt[i]
-				f=spt[i].main(self.remoteConfig.get_config("%s.%s" %(self.conf['configPrefix'],i),""))
+				f=spt[i].main(self.remoteConfig.copy("%s.%s" %(self.conf['configPrefix'],i)))
 				if f:
 					tf[i]=f
 		return tf
@@ -328,7 +334,7 @@ class RunPlugin(object):
 		for i in spd:
 			if i not in self.alreadyD:
 				self.alreadyD[i]=spd[i]
-				f=spd[i].main(self.remoteConfig.get_config("%s.%s" %(self.conf['configPrefix'],i),""))
+				f=spd[i].main(self.remoteConfig.copy("%s.%s" %(self.conf['configPrefix'],i)))
 				if f:
 					tf[i]=f
 		return tf

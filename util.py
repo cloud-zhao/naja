@@ -25,6 +25,10 @@ class MyTools(object):
 		return os.path.realpath(p)
 
 	@staticmethod
+	def now_time():
+		return int(time.time()*1000)
+
+	@staticmethod
 	def get_uuid(constant=False):
 		uuid_file="%s/.naja.uuid" %(MyTools.get_abs_path(__file__))
 		uuid_str=str(uuid.uuid1())
@@ -111,6 +115,27 @@ class MyTools(object):
 			if i in config:
 				conf[i]=config[i]
 		return conf
+
+	@staticmethod
+	def namedtuple_dict(ndict):
+		if isinstance(ndict,tuple) and hasattr(ndict,"_asdict"):
+			d=dict(ndict._asdict())
+			for k,v in d.items():
+				d[k]=MyTools.namedtuple_dict(v)
+			return d
+		elif isinstance(ndict,list):
+			l=[]
+			for i in ndict:
+				l.append(MyTools.namedtuple_dict(i))
+			return l
+		elif isinstance(ndict,dict):
+			sd={}
+			for k,v in ndict.items():
+				sd[k]=MyTools.namedtuple_dict(v)
+			return sd
+		else:
+			return ndict
+
 
 class SysPs(object):
 	ppath="/proc"

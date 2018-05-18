@@ -41,9 +41,8 @@ class CollectSysMsg(TRun):
 	logger = MyTools.getLogger(__name__+".CollectSysMsg")
 
 	@staticmethod
-	def main(configFile):
-		proper=Properties(MyTools.get_abs_file(configFile))
-		conf=proper.get_value(CollectSysMsg.PROJECT_NAME)
+	def main(remoteConfig):
+		conf=remoteConfig.get_config(CollectSysMsg.PROJECT_NAME)
 		return CollectSysMsg(**conf)
 
 	def __init__(self,**config):
@@ -486,14 +485,10 @@ class CollectSysMsg(TRun):
 
 
 #表示一个yarn的container
-Container=namedtuple("Container",["hostId","appId","containerId"])
-#表示一台主机上所有非appMaster类型的container
-HostContainer=namedtuple("HostContainer",["hostId","containers"])
+Container=namedtuple("Container",["hostId","appId","containerId","timestamp"])
 
 #表示一个spark app 其中containers表示这个app所有的container
-SparkApp=namedtuple("SparkApp",["hostId","appId","userClass","appName","containers"])
-#表示一个主机上所有的spark app drive
-HostApp=namedtuple("HostApp",["hostId","apps"])
+SparkApp=namedtuple("SparkApp",["hostId","appId","userClass","appName","containers","timestamp"])
 
 #表示一个主机上所有的任务
 HostJob=namedtuple("HostJob",["hostId","hostApp","hostContainer"])
@@ -527,33 +522,35 @@ class CollectYarnAppMsg():
 		self.host_id = MyTools.get_uuid(True)
 	
 	"""
-	return HostJob(hostId="",hostApp=HostApp,hostContainer=HostContainer)
+	return HostJob(hostId="",hostApp=List[SparkApp],hostContainer=List[Container])
 	{	"hostId":"",
-		"hostApp":{	"hostId":"",
-					"apps":[{
-							"hostId":"xx",
-							"appId":"xx",
-							"userClass":"xx",
-							"appName":"xx",
-							"containers":[Container._asdict,...]},
-							{...}
-					]
-		},
-		"hostContainer":{"hostId":"xx",
-					"containers":[{
-							"hostId":"xx",
-							"appId":"xx",
-							"containerId":"xx"},
-							{...}
-					]
-		}
+		"hostApp":[
+			{	
+				"hostId":"",
+				"apps":[{
+				"hostId":"xx",
+				"appId":"xx",
+				"userClass":"xx",
+				"appName":"xx",
+				"containers":[Container._asdict,...],
+				"timestamp":xxxxx
+			},
+			{...}
+		],
+		"hostContainer":[
+			{
+				"hostId":"xx",
+				"appId":"xx",
+				"containerId":"xx",
+				"timestamp":xxxxx
+			},
+			{...},
+		]
 	}
 	"""
 	def get_app(self):
 		res=self._get_app_all()
-		hostApp=HostApp(self.host_id,res[0])
-		hostContainer=HostContainer(self.host_id,res[1])
-		return MyTools.namedtuple_dict(HostJob(self.host_id,hostApp,hostContainer))
+		return MyTools.namedtuple_dict(HostJob(self.host_id,res[0],res[1]))
 
 	def _get_app_all(self):
 		apps=[]
@@ -605,9 +602,9 @@ class CollectYarnAppMsg():
 			appid=self._get_appid(cmdline)
 			appmsg=self._get_drive_msg(cmdline)
 			if appid and len(appid) == 2:
-				container=Container(self.host_id,appid[0],appid[1])
+				container=Container(self.host_id,appid[0],appid[1],MyTools.now_time())
 				if appmsg and len(appmsg) == 2:
-					app_list[appid[0]]=SparkApp(self.host_id,appid[0],appmsg[0],appmsg[1],[container])
+					app_list[appid[0]]=SparkApp(self.host_id,appid[0],appmsg[0],appmsg[1],[container],MyTools.now_time())
 		return app_list
 
 	def _get_executor(self):
@@ -618,7 +615,7 @@ class CollectYarnAppMsg():
 				continue
 			appid=self._get_appid(cmdline)
 			if appid and len(appid) == 2:
-				container=Container(self.host_id,appid[0],appid[1])
+				container=Container(self.host_id,appid[0],appid[1],MyTools.now_time())
 				if app_list.has_key(appid[0]):
 					app_list[appid[0]].append(container)
 				else:
