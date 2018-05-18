@@ -323,7 +323,10 @@ class RunPlugin(object):
 		for i in spt:
 			if i not in self.alreadyF:
 				self.alreadyF[i]=spt[i]
-				f=spt[i].main(self.remoteConfig.copy("%s.%s" %(self.conf['configPrefix'],i)))
+				cf=self.remoteConfig.get_config("%s.%s" %(self.conf['configPrefix'],i))
+				if not cf:
+					continue
+				f=spt[i].main(self.remoteConfig.copy(cf)))
 				if f:
 					tf[i]=f
 		return tf
@@ -334,7 +337,10 @@ class RunPlugin(object):
 		for i in spd:
 			if i not in self.alreadyD:
 				self.alreadyD[i]=spd[i]
-				f=spd[i].main(self.remoteConfig.copy("%s.%s" %(self.conf['configPrefix'],i)))
+				cf=self.remoteConfig.get_config("%s.%s" %(self.conf['configPrefix'],i))
+				if not cf:
+					continue
+				f=spd[i].main(self.remoteConfig.copy(cf))
 				if f:
 					tf[i]=f
 		return tf
@@ -374,11 +380,7 @@ class RunPlugin(object):
 		tf = self._get_T()
 		self._run_T(tf)
 		df = self._get_D()
-		_dwork = self._run_D(df)
-		works.extend(_dwork)
-		for i in works:
-			i.start()
-			self.logger.info("start works %s" %str(i))
+		self._run_D(df)
 
 	def _create_scheduler(self):
 		if not self.procScheduler:
