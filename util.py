@@ -12,6 +12,7 @@ import struct
 import json
 import psutil
 import logging
+import tarfile
 from naja.error import ConfigFileError
 
 
@@ -27,6 +28,10 @@ class MyTools(object):
 	@staticmethod
 	def now_time():
 		return int(time.time()*1000)
+
+	@staticmethod
+	def get_host_id():
+		return MyTools.get_uuid(True)
 
 	@staticmethod
 	def get_uuid(constant=False):
@@ -123,7 +128,7 @@ class MyTools(object):
 			for k,v in d.items():
 				d[k]=MyTools.namedtuple_dict(v)
 			return d
-		elif isinstance(ndict,list):
+		elif isinstance(ndict,(list,tuple)):
 			l=[]
 			for i in ndict:
 				l.append(MyTools.namedtuple_dict(i))
@@ -136,6 +141,19 @@ class MyTools(object):
 		else:
 			return ndict
 
+	@staticmethod
+	def untar(tar,target):
+		if not os.path.exists(target):
+			os.mkdir(target)
+		try:
+			fh = tarfile.open(tar,"r:gz")
+			names = fh.getnames()
+			for i in names:
+				fh.extract(i,target)
+			fh.close()
+			return True
+		except:
+			return False
 
 class SysPs(object):
 	ppath="/proc"
