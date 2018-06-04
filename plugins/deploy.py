@@ -3,7 +3,7 @@ import sys
 import time
 import json
 import Queue
-from naja.plugin import DRun
+from naja.plugin import DRun,TRun
 from naja.util import MyTools
 from naja.send import SendHttp
 from collections import namedtuple
@@ -28,7 +28,8 @@ class DynamicDeploy(DRun):
 	
 	@staticmethod
 	def main(remoteConfig):
-		return DynamicDeploy(configFile)
+		config=remoteConfig.get_config(DynamicDeploy.PROJECT_NAME)
+		return DynamicDeploy(**config)
 	
 	def __init__(self,**config):
 		self.conf = MyTools.load_config(self.DEFAULT_CONFIG,config)
@@ -143,3 +144,59 @@ class FetchJobResult(Thread):
 
 	def run(self):
 		self.complete_job()
+
+
+class DeployCode(TRun):
+	logger = MyTools.getLogger(__name__+".DeployCode")
+	PROJECT_NAME = "naja"
+	DEFAULT_CONFIG = {
+		"local_package":MyTools.get_abs_path(__file__),
+		"remote_file":"naja/source/codes/code_list.json",
+		"remote_server":None,
+	}
+
+	@staticmethod
+	def main(remoteConfig):
+		config = remoteConfig.get_config(DeployCode.PROJECT_NAME)
+		return DeployCode(**config)
+
+	def __init__(self,**config):
+		self.conf = MyTools.load_config(self.DEFAULT_CONFIG,config)
+		self.send_http = SendHttp()
+
+	def _get_code_list(self):
+		"""
+		code_path: http://127.0.0.1:8920/naja/source/codes/code_list.json
+		code_list.json: ["test.py"]
+		"""
+
+		code_path = "%s/%s" % (self.conf['remote_server'],self.conf['remote_file'])
+		code_local_path = "%s/%s" %(MyTools.get_abs_path(__file__),"code_local.json")
+		try:
+			code_str = self.send_http.get_chunk(code_path)
+			code_list = json.loads(code_str)
+		except Exception,e:
+			self.logger.warning("get code list failed. %s" % e.message)
+			code_list = []
+
+		if os.path.exists(code_local_path):
+			code_local_list = self.send_http.get_local_info(code_local_path)
+		else:
+			code_local_list = []
+		code1=set(code_list)
+		code2=set(code_local_list)
+		ready_code_list = list(code1-code2)
+		self.sh.write_local_info(code_local_path,json.dumps(list(code1|code2)))
+		return ready_code_list
+
+	def get_code(self):
+		remote_code_path = "%s/%s" %(self.conf['remote_server'],"naja/source/codes")
+		for i in self._get_code_list():
+			self.send_http.get_file("%s/%s" %(remote_code_path,i),"%s/%s" %(self.conf['local_package'],i))
+
+	def run(self):
+		self.get_code()
+
+
+
+
